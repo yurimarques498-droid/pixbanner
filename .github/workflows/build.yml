@@ -1,1 +1,630 @@
 .github/workflows/build.yml
+name: apk
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Gerar projeto completo
+        run: |
+          set -e
+          mkdir -p .github app/src/main/java/br/com/pixbanner
+          mkdir -p app/src/main/res/values app/src/main/res/drawable app/src/main/res/mipmap-anydpi-v26
+
+          cat > settings.gradle.kts <<'EOF'
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "PixBanner"
+          include(":app")
+          EOF
+
+          cat > build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application") version "8.5.2" apply false
+              id("org.jetbrains.kotlin.android") version "2.0.20" apply false
+              id("org.jetbrains.kotlin.plugin.compose") version "2.0.20" apply false
+          }
+          EOF
+
+          cat > gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          kotlin.code.style=official
+          EOF
+
+          cat > app/proguard-rules.pro <<'EOF'
+          -keep class br.com.pixbanner.** { *; }
+          EOF
+
+          cat > app/build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+              id("org.jetbrains.kotlin.plugin.compose")
+          }
+          android {
+              namespace = "br.com.pixbanner"
+              compileSdk = 35
+              defaultConfig {
+                  applicationId = "br.com.pixbanner"
+                  minSdk = 26
+                  targetSdk = 35
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+              buildTypes { release { isMinifyEnabled = false } }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions { jvmTarget = "17" }
+              buildFeatures { compose = true }
+              packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+          }
+          dependencies {
+              implementation("androidx.core:core-ktx:1.13.1")
+              implementation("androidx.activity:activity-compose:1.9.2")
+              implementation(platform("androidx.compose:compose-bom:2024.09.02"))
+              implementation("androidx.compose.ui:ui")
+              implementation("androidx.compose.material3:material3")
+          }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
+              <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.PixBanner">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleTask"
+                      android:theme="@style/Theme.PixBanner">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+                  <receiver android:name=".AlarmReceiver" android:exported="false" />
+              </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/res/values/strings.xml <<'EOF'
+          <resources>
+              <string name="app_name">Carteira</string>
+          </resources>
+          EOF
+
+          cat > app/src/main/res/values/colors.xml <<'EOF'
+          <resources>
+              <color name="ic_launcher_background">#830AD1</color>
+          </resources>
+          EOF
+
+          cat > app/src/main/res/values/themes.xml <<'EOF'
+          <resources>
+              <style name="Theme.PixBanner" parent="android:Theme.Material.NoActionBar">
+                  <item name="android:statusBarColor">#0B0B0D</item>
+                  <item name="android:navigationBarColor">#0B0B0D</item>
+                  <item name="android:windowBackground">#0B0B0D</item>
+              </style>
+          </resources>
+          EOF
+
+          cat > app/src/main/res/drawable/ic_stat_nu.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp" android:height="24dp"
+              android:viewportWidth="24" android:viewportHeight="24">
+              <path android:pathData="M5,20 L5,13 C5,10 7,8.4 9.4,8.4 C11.8,8.4 13,10 13,13 L13,20"
+                  android:strokeColor="#FFFFFF" android:strokeWidth="3.2"
+                  android:strokeLineCap="round" android:strokeLineJoin="round" />
+              <path android:pathData="M15.4,8.6 L15.4,15.2 C15.4,18.2 17.3,19.6 19.1,19.6 C20.9,19.6 22.3,18.4 22.3,15.4 L22.3,8.6"
+                  android:strokeColor="#FFFFFF" android:strokeWidth="3.2"
+                  android:strokeLineCap="round" android:strokeLineJoin="round" />
+          </vector>
+          EOF
+
+          cat > app/src/main/res/drawable/ic_stat_inter.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp" android:height="24dp"
+              android:viewportWidth="24" android:viewportHeight="24">
+              <path android:fillColor="#FFFFFF"
+                  android:pathData="M12,3.6 m-2,0 a2,2 0 1,1 4,0 a2,2 0 1,1 -4,0 z" />
+              <path android:pathData="M12,9.2 L12,20.4"
+                  android:strokeColor="#FFFFFF" android:strokeWidth="3.4"
+                  android:strokeLineCap="round" />
+          </vector>
+          EOF
+
+          cat > app/src/main/res/drawable/ic_stat_picpay.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp" android:height="24dp"
+              android:viewportWidth="24" android:viewportHeight="24">
+              <path android:pathData="M8.4,21.5 L8.4,9"
+                  android:strokeColor="#FFFFFF" android:strokeWidth="3.4"
+                  android:strokeLineCap="round" />
+              <path android:pathData="M8.4,13.6 C8.4,11 10.4,9.1 13.1,9.1 C16,9.1 17.8,11.1 17.8,13.6 C17.8,16.1 16,18.1 13.1,18.1 C10.4,18.1 8.4,16.2 8.4,13.6"
+                  android:strokeColor="#FFFFFF" android:strokeWidth="3.4"
+                  android:strokeLineCap="round" android:strokeLineJoin="round" />
+          </vector>
+          EOF
+
+          cat > app/src/main/res/drawable/ic_launcher_fg.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp" android:height="108dp"
+              android:viewportWidth="108" android:viewportHeight="108">
+              <group android:scaleX="2.6" android:scaleY="2.6"
+                  android:translateX="22.8" android:translateY="22.8">
+                  <path android:pathData="M5,20 L5,13 C5,10 7,8.4 9.4,8.4 C11.8,8.4 13,10 13,13 L13,20"
+                      android:strokeColor="#FFFFFF" android:strokeWidth="3.2"
+                      android:strokeLineCap="round" android:strokeLineJoin="round" />
+                  <path android:pathData="M15.4,8.6 L15.4,15.2 C15.4,18.2 17.3,19.6 19.1,19.6 C20.9,19.6 22.3,18.4 22.3,15.4 L22.3,8.6"
+                      android:strokeColor="#FFFFFF" android:strokeWidth="3.2"
+                      android:strokeLineCap="round" android:strokeLineJoin="round" />
+              </group>
+          </vector>
+          EOF
+
+          cat > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'EOF'
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/ic_launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_fg" />
+          </adaptive-icon>
+          EOF
+
+          cat > app/src/main/java/br/com/pixbanner/Bank.kt <<'EOF'
+          package br.com.pixbanner
+
+          import androidx.annotation.ColorInt
+          import java.text.NumberFormat
+          import java.util.Locale
+
+          enum class Bank(
+              val key: String,
+              val label: String,
+              @ColorInt val color: Int,
+              val title: String,
+              val smallIcon: Int,
+          ) {
+              NUBANK("nubank", "Nubank", 0xFF830AD1.toInt(), "Transferência recebida", R.drawable.ic_stat_nu),
+              INTER("inter", "Inter", 0xFFFF7A00.toInt(), "Pix recebido", R.drawable.ic_stat_inter),
+              PICPAY("picpay", "PicPay", 0xFF11C76F.toInt(), "Pix recebido", R.drawable.ic_stat_picpay);
+
+              val channelId: String get() = "pix_$key"
+              val channelName: String get() = "Pix recebido - $label"
+
+              fun body(amount: String, sender: String, masked: Boolean): String = when (this) {
+                  NUBANK -> "Você recebeu uma transferência de R$ $amount de ${maskNubank(sender, masked)}."
+                  INTER -> "Você recebeu um Pix de R$ $amount de ${maskInter(sender, masked)}"
+                  PICPAY -> "Oba! Você recebeu R$ $amount de ${maskPicpay(sender, masked)} 💸"
+              }
+
+              companion object {
+                  fun of(key: String?): Bank = entries.firstOrNull { it.key == key } ?: NUBANK
+
+                  private fun parts(s: String) = s.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+
+                  fun maskNubank(s: String, masked: Boolean): String {
+                      val p = parts(s)
+                      if (!masked || p.size < 2) return p.joinToString(" ")
+                      return p.first() + " " + "*".repeat(p.last().length)
+                  }
+
+                  fun maskInter(s: String, masked: Boolean): String {
+                      val p = parts(s)
+                      if (!masked || p.size < 2) return p.joinToString(" ")
+                      val f = p.first(); val l = p.last()
+                      return buildString {
+                          append(f.first())
+                          append("•".repeat((f.length - 1).coerceAtLeast(1)))
+                          append(" l ")
+                          append(l.first())
+                          if (l.length > 2) append("•".repeat(l.length - 2))
+                          if (l.length > 1) append(l.last())
+                      }
+                  }
+
+                  fun maskPicpay(s: String, masked: Boolean): String {
+                      val p = parts(s)
+                      if (!masked || p.size < 2) return p.joinToString(" ")
+                      return p.first() + " " + p.last().first() + "."
+                  }
+
+                  fun brl(cents: Long): String =
+                      NumberFormat.getCurrencyInstance(Locale("pt", "BR"))
+                          .format(cents / 100.0)
+                          .replace("R$", "")
+                          .replace('\u00A0', ' ')
+                          .trim()
+
+                  val NOMES = listOf(
+                      "Gabriel Silva", "Ana Souza", "Lucas Oliveira", "Mariana Costa",
+                      "Rafael Almeida", "Juliana Ferreira", "Bruno Santos", "Camila Rocha",
+                      "Thiago Pereira", "Larissa Mendes", "Diego Martins", "Patrícia Lima",
+                      "Vinícius Barros", "Fernanda Dias", "Marcos Ribeiro", "Bianca Freitas"
+                  )
+              }
+          }
+          EOF
+
+          cat > app/src/main/java/br/com/pixbanner/BankArt.kt <<'EOF'
+          package br.com.pixbanner
+
+          import android.graphics.Bitmap
+          import android.graphics.Canvas
+          import android.graphics.Color
+          import android.graphics.Paint
+          import android.graphics.RectF
+          import android.graphics.Typeface
+          import android.text.TextPaint
+
+          object BankArt {
+              fun largeIcon(bank: Bank, size: Int = 256): Bitmap {
+                  val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+                  val c = Canvas(bmp)
+                  val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = bank.color }
+                  val r = if (bank == Bank.NUBANK) size * 0.23f else size / 2f
+                  c.drawRoundRect(RectF(0f, 0f, size.toFloat(), size.toFloat()), r, r, bg)
+                  val glyph = when (bank) {
+                      Bank.NUBANK -> "nu" to 0.54f
+                      Bank.INTER -> "inter" to 0.245f
+                      Bank.PICPAY -> "p" to 0.60f
+                  }
+                  val tp = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                      color = Color.WHITE
+                      typeface = Typeface.create("sans-serif", Typeface.BOLD)
+                      textAlign = Paint.Align.CENTER
+                      textSize = size * glyph.second
+                      letterSpacing = -0.055f
+                  }
+                  val fm = tp.fontMetrics
+                  c.drawText(glyph.first, size / 2f, size / 2f - (fm.ascent + fm.descent) / 2f, tp)
+                  return bmp
+              }
+          }
+          EOF
+
+          cat > app/src/main/java/br/com/pixbanner/Notifier.kt <<'EOF'
+          package br.com.pixbanner
+
+          import android.app.NotificationChannel
+          import android.app.NotificationManager
+          import android.app.PendingIntent
+          import android.content.Context
+          import android.content.Intent
+          import androidx.core.app.NotificationCompat
+          import androidx.core.content.pm.ShortcutInfoCompat
+          import androidx.core.content.pm.ShortcutManagerCompat
+          import androidx.core.graphics.drawable.IconCompat
+
+          object Notifier {
+              fun ensureChannels(ctx: Context) {
+                  val nm = ctx.getSystemService(NotificationManager::class.java)
+                  Bank.entries.forEach { b ->
+                      val ch = NotificationChannel(b.channelId, b.channelName, NotificationManager.IMPORTANCE_HIGH).apply {
+                          description = "Avisos de Pix recebido"
+                          enableLights(true)
+                          lightColor = b.color
+                          enableVibration(true)
+                          vibrationPattern = longArrayOf(0, 110, 80, 110)
+                          setShowBadge(true)
+                          lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                      }
+                      nm.createNotificationChannel(ch)
+                  }
+              }
+
+              private fun shortcutId(ctx: Context, bank: Bank): String? = runCatching {
+                  val id = "bank_${bank.key}"
+                  val sc = ShortcutInfoCompat.Builder(ctx, id)
+                      .setShortLabel(bank.label)
+                      .setLongLabel(bank.label)
+                      .setIcon(IconCompat.createWithBitmap(BankArt.largeIcon(bank, 192)))
+                      .setIntent(Intent(ctx, MainActivity::class.java).setAction(Intent.ACTION_VIEW))
+                      .build()
+                  ShortcutManagerCompat.pushDynamicShortcut(ctx, sc)
+                  id
+              }.getOrNull()
+
+              fun show(ctx: Context, bank: Bank, amount: String, sender: String, masked: Boolean) {
+                  val nm = ctx.getSystemService(NotificationManager::class.java)
+                  ensureChannels(ctx)
+                  val text = bank.body(amount, sender, masked)
+                  val open = PendingIntent.getActivity(
+                      ctx, 0,
+                      Intent(ctx, MainActivity::class.java).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                  )
+                  val n = NotificationCompat.Builder(ctx, bank.channelId)
+                      .setSmallIcon(bank.smallIcon)
+                      .setLargeIcon(BankArt.largeIcon(bank))
+                      .setColor(bank.color)
+                      .setContentTitle(bank.title)
+                      .setContentText(text)
+                      .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                      .setPriority(NotificationCompat.PRIORITY_HIGH)
+                      .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                      .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                      .setDefaults(NotificationCompat.DEFAULT_ALL)
+                      .setAutoCancel(true)
+                      .setShowWhen(true)
+                      .setWhen(System.currentTimeMillis())
+                      .setContentIntent(open)
+                      .apply { shortcutId(ctx, bank)?.let { setShortcutId(it) } }
+                      .build()
+                  nm.notify(bank.ordinal + 1000, n)
+              }
+          }
+          EOF
+
+          cat > app/src/main/java/br/com/pixbanner/AlarmReceiver.kt <<'EOF'
+          package br.com.pixbanner
+
+          import android.content.BroadcastReceiver
+          import android.content.Context
+          import android.content.Intent
+
+          class AlarmReceiver : BroadcastReceiver() {
+              override fun onReceive(ctx: Context, intent: Intent) {
+                  val bank = Bank.of(intent.getStringExtra(EXTRA_BANK))
+                  val amount = intent.getStringExtra(EXTRA_AMOUNT) ?: "0,00"
+                  val sender = intent.getStringExtra(EXTRA_SENDER) ?: "Cliente"
+                  val masked = intent.getBooleanExtra(EXTRA_MASKED, true)
+                  Notifier.show(ctx, bank, amount, sender, masked)
+              }
+
+              companion object {
+                  const val EXTRA_BANK = "bank"
+                  const val EXTRA_AMOUNT = "amount"
+                  const val EXTRA_SENDER = "sender"
+                  const val EXTRA_MASKED = "masked"
+              }
+          }
+          EOF
+
+          cat > app/src/main/java/br/com/pixbanner/Theme.kt <<'EOF'
+          package br.com.pixbanner
+
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.material3.darkColorScheme
+          import androidx.compose.runtime.Composable
+          import androidx.compose.ui.graphics.Color
+
+          private val Scheme = darkColorScheme(
+              primary = Color(0xFF30D158),
+              onPrimary = Color(0xFF04240F),
+              background = Color(0xFF0B0B0D),
+              surface = Color(0xFF15151A),
+              onSurface = Color(0xFFECECF1),
+          )
+
+          @Composable
+          fun AppTheme(content: @Composable () -> Unit) =
+              MaterialTheme(colorScheme = Scheme, content = content)
+          EOF
+
+          cat > app/src/main/java/br/com/pixbanner/MainActivity.kt <<'EOF'
+          package br.com.pixbanner
+
+          import android.Manifest
+          import android.app.AlarmManager
+          import android.app.PendingIntent
+          import android.content.Intent
+          import android.content.pm.PackageManager
+          import android.net.Uri
+          import android.os.Build
+          import android.os.Bundle
+          import android.provider.Settings
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.setContent
+          import androidx.activity.result.contract.ActivityResultContracts
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.rememberScrollState
+          import androidx.compose.foundation.text.KeyboardOptions
+          import androidx.compose.foundation.verticalScroll
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.text.input.KeyboardType
+          import androidx.compose.ui.unit.dp
+          import androidx.core.content.ContextCompat
+          import kotlin.random.Random
+
+          class MainActivity : ComponentActivity() {
+
+              private val notifPerm = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  Notifier.ensureChannels(this)
+                  askNotificationPermission()
+                  askExactAlarmPermission()
+                  setContent {
+                      AppTheme {
+                          Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                              ConfigScreen(::schedule)
+                          }
+                      }
+                  }
+              }
+
+              private fun askNotificationPermission() {
+                  if (Build.VERSION.SDK_INT >= 33 &&
+                      ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                      != PackageManager.PERMISSION_GRANTED
+                  ) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS)
+              }
+
+              private fun askExactAlarmPermission() {
+                  if (Build.VERSION.SDK_INT >= 31) {
+                      val am = getSystemService(AlarmManager::class.java)
+                      if (!am.canScheduleExactAlarms()) {
+                          runCatching {
+                              startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName")))
+                          }
+                      }
+                  }
+              }
+
+              private fun schedule(bank: Bank, cents: Long, sender: String, masked: Boolean, delay: Long) {
+                  val payload = Intent(this, AlarmReceiver::class.java).apply {
+                      putExtra(AlarmReceiver.EXTRA_BANK, bank.key)
+                      putExtra(AlarmReceiver.EXTRA_AMOUNT, Bank.brl(cents))
+                      putExtra(AlarmReceiver.EXTRA_SENDER, sender)
+                      putExtra(AlarmReceiver.EXTRA_MASKED, masked)
+                  }
+                  val pi = PendingIntent.getBroadcast(
+                      this, 7, payload,
+                      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                  )
+                  val am = getSystemService(AlarmManager::class.java)
+                  val at = System.currentTimeMillis() + delay * 1000L
+                  try {
+                      am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+                  } catch (e: SecurityException) {
+                      am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+                  }
+                  finishAndRemoveTask()
+              }
+          }
+
+          @OptIn(ExperimentalMaterial3Api::class)
+          @Composable
+          private fun ConfigScreen(onSchedule: (Bank, Long, String, Boolean, Long) -> Unit) {
+              var bank by remember { mutableStateOf(Bank.NUBANK) }
+              var cents by remember { mutableStateOf(150000L) }
+              var sender by remember { mutableStateOf("Gabriel Silva") }
+              var masked by remember { mutableStateOf(true) }
+              var delayText by remember { mutableStateOf("8") }
+              var expanded by remember { mutableStateOf(false) }
+
+              Column(
+                  Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
+                  verticalArrangement = Arrangement.spacedBy(10.dp)
+              ) {
+                  Text("Pix Banner", style = MaterialTheme.typography.headlineSmall)
+                  Text(
+                      "Notificação nativa com identidade do banco",
+                      style = MaterialTheme.typography.bodySmall,
+                      color = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f)
+                  )
+                  Spacer(Modifier.height(8.dp))
+
+                  ExposedDropdownMenuBox(expanded, { expanded = it }) {
+                      OutlinedTextField(
+                          value = bank.label,
+                          onValueChange = {},
+                          readOnly = true,
+                          label = { Text("Banco") },
+                          trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                          modifier = Modifier.fillMaxWidth().menuAnchor()
+                      )
+                      ExposedDropdownMenu(expanded, { expanded = false }) {
+                          Bank.entries.forEach {
+                              DropdownMenuItem(text = { Text(it.label) }, onClick = { bank = it; expanded = false })
+                          }
+                      }
+                  }
+
+                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                      OutlinedTextField(
+                          value = Bank.brl(cents),
+                          onValueChange = { v -> cents = v.filter { it.isDigit() }.take(9).toLongOrNull() ?: 0L },
+                          label = { Text("Valor (R$)") },
+                          keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                          modifier = Modifier.weight(1f)
+                      )
+                      OutlinedButton(onClick = { cents = Random.nextLong(3000, 180000) }) { Text("Aleatório") }
+                  }
+
+                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                      OutlinedTextField(
+                          value = sender,
+                          onValueChange = { sender = it },
+                          label = { Text("Remetente") },
+                          modifier = Modifier.weight(1f)
+                      )
+                      OutlinedButton(onClick = { sender = Bank.NOMES.random() }) { Text("Aleatório") }
+                  }
+
+                  Row(verticalAlignment = Alignment.CenterVertically) {
+                      Text("Ocultar sobrenome", modifier = Modifier.weight(1f))
+                      Switch(checked = masked, onCheckedChange = { masked = it })
+                  }
+
+                  OutlinedTextField(
+                      value = delayText,
+                      onValueChange = { delayText = it.filter { c -> c.isDigit() }.take(3) },
+                      label = { Text("Atraso (segundos)") },
+                      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                      modifier = Modifier.fillMaxWidth()
+                  )
+
+                  Spacer(Modifier.height(4.dp))
+                  Text("Prévia", style = MaterialTheme.typography.labelMedium)
+                  Card(Modifier.fillMaxWidth()) {
+                      Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                          Surface(shape = MaterialTheme.shapes.medium, color = Color(bank.color), modifier = Modifier.size(46.dp)) {}
+                          Column {
+                              Text(bank.title, style = MaterialTheme.typography.titleSmall)
+                              Text(bank.body(Bank.brl(cents), sender, masked), style = MaterialTheme.typography.bodySmall)
+                          }
+                      }
+                  }
+
+                  Spacer(Modifier.height(6.dp))
+                  Button(
+                      onClick = { onSchedule(bank, cents, sender, masked, delayText.toLongOrNull() ?: 8L) },
+                      modifier = Modifier.fillMaxWidth().height(52.dp)
+                  ) { Text("Agendar e fechar o app") }
+
+                  Text(
+                      "O app encerra na hora. Mantenha \"Notificações flutuantes\" ativo nas configurações do MIUI.",
+                      style = MaterialTheme.typography.labelSmall,
+                      color = MaterialTheme.colorScheme.onSurface.copy(alpha = .5f)
+                  )
+              }
+          }
+          EOF
+
+          echo "Projeto gerado:"
+          find . -type f -not -path './.git/*' | sort
+
+      - name: Compilar APK
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Publicar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PixBanner-apk
+          path: app/build/outputs/apk/debug/*.apk
